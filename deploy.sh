@@ -162,7 +162,7 @@ server {
         # Cache static assets
         location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
             expires 1y;
-            add_header Cache-Control "public, immutable";
+            add_header Cache-Control "public, max-age=31536000, immutable";
         }
     }
     
