@@ -80,7 +80,7 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
-    location ~ ^/[a-zA-Z0-9]{6,8}\$ {
+    location ~ ^/[a-zA-Z0-9]{6,8}$ {
         proxy_pass http://localhost:3001;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -96,6 +96,8 @@ server {
 EOF
 
 echo "🔗 Step 10: Enabling site..."
+rm -f /etc/nginx/sites-enabled/linkguardv1
+rm -f /etc/nginx/sites-available/linkguardv1
 ln -sf /etc/nginx/sites-available/$APP_NAME /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 
