@@ -435,7 +435,7 @@ app.get('/api/analytics', authenticateToken, async (req, res) => {
 });
 
 // Redirect route (public)
-app.get('/:shortCode', async (req, res) => {
+app.get('/:shortCode([a-zA-Z0-9]{6,8})', async (req, res) => {
   try {
     const { shortCode } = req.params;
     const links = await readCSV(FILES.links);
