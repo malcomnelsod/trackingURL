@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import UAParser from 'ua-parser-js';
+import { UAParser } from 'ua-parser-js';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 import csvParser from 'csv-parser';
 import csvWriter from 'csv-writer';
