@@ -38,12 +38,6 @@ print_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
 }
 
-# Check if running as root
-if [[ $EUID -eq 0 ]]; then
-   print_error "This script should not be run as root. Please run as a regular user with sudo privileges."
-   exit 1
-fi
-
 # Get domain name from user
 read -p "Enter your domain name (e.g., linktracker.yourdomain.com): " DOMAIN_NAME
 if [[ -z "$DOMAIN_NAME" ]]; then
@@ -56,33 +50,33 @@ read -p "Do you want to enable SSL with Let's Encrypt? (y/n): " ENABLE_SSL
 ENABLE_SSL=${ENABLE_SSL,,} # Convert to lowercase
 
 print_step "1. Updating system packages..."
-sudo apt update && sudo apt upgrade -y
+apt update && apt upgrade -y
 
 print_step "2. Installing Node.js $NODE_VERSION..."
 if ! command -v node &> /dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | sudo -E bash -
-    sudo apt-get install -y nodejs
+    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
+    apt-get install -y nodejs
 else
     print_status "Node.js is already installed"
 fi
 
 print_step "3. Installing Nginx..."
 if ! command -v nginx &> /dev/null; then
-    sudo apt install -y nginx
+    apt install -y nginx
 else
     print_status "Nginx is already installed"
 fi
 
 print_step "4. Installing PM2 for process management..."
 if ! command -v pm2 &> /dev/null; then
-    sudo npm install -g pm2
+    npm install -g pm2
 else
     print_status "PM2 is already installed"
 fi
 
 print_step "5. Creating application directory..."
-sudo mkdir -p $APP_DIR
-sudo chown -R $USER:$USER $APP_DIR
+mkdir -p $APP_DIR
+chown -R www-data:www-data $APP_DIR
 
 print_step "6. Copying application files..."
 cp -r ./* $APP_DIR/
@@ -98,14 +92,15 @@ print_step "9. Creating data directory..."
 mkdir -p $APP_DIR/server/data
 
 print_step "10. Creating systemd service..."
-sudo tee $SERVICE_FILE > /dev/null <<EOF
+tee $SERVICE_FILE > /dev/null <<EOF
 [Unit]
 Description=LinkTracker URL Redirector
 After=network.target
 
 [Service]
 Type=simple
-User=$USER
+User=www-data
+Group=www-data
 WorkingDirectory=$APP_DIR
 ExecStart=/usr/bin/node server/index.js
 Restart=always
@@ -119,7 +114,7 @@ WantedBy=multi-user.target
 EOF
 
 print_step "11. Configuring Nginx..."
-sudo tee $NGINX_CONFIG > /dev/null <<EOF
+tee $NGINX_CONFIG > /dev/null <<EOF
 server {
     listen 80;
     server_name $DOMAIN_NAME;
@@ -181,32 +176,32 @@ server {
 EOF
 
 # Enable the site
-sudo ln -sf $NGINX_CONFIG /etc/nginx/sites-enabled/
-sudo nginx -t
+ln -sf $NGINX_CONFIG /etc/nginx/sites-enabled/
+nginx -t
 
 print_step "12. Starting services..."
-sudo systemctl daemon-reload
-sudo systemctl enable $APP_NAME
-sudo systemctl start $APP_NAME
-sudo systemctl enable nginx
-sudo systemctl restart nginx
+systemctl daemon-reload
+systemctl enable $APP_NAME
+systemctl start $APP_NAME
+systemctl enable nginx
+systemctl restart nginx
 
 # Setup SSL if requested
 if [[ "$ENABLE_SSL" == "y" ]]; then
     print_step "13. Setting up SSL with Let's Encrypt..."
     
     if ! command -v certbot &> /dev/null; then
-        sudo apt install -y certbot python3-certbot-nginx
+        apt install -y certbot python3-certbot-nginx
     fi
     
     # Get SSL certificate
-    sudo certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos --email admin@$DOMAIN_NAME
+    certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos --email admin@$DOMAIN_NAME
     
     print_status "SSL certificate installed successfully!"
 fi
 
 print_step "14. Setting up log rotation..."
-sudo tee /etc/logrotate.d/$APP_NAME > /dev/null <<EOF
+tee /etc/logrotate.d/$APP_NAME > /dev/null <<EOF
 /var/log/$APP_NAME/*.log {
     daily
     missingok
@@ -214,7 +209,7 @@ sudo tee /etc/logrotate.d/$APP_NAME > /dev/null <<EOF
     compress
     delaycompress
     notifempty
-    create 0640 $USER $USER
+    create 0640 www-data www-data
     postrotate
         systemctl reload $APP_NAME
     endscript
@@ -222,7 +217,7 @@ sudo tee /etc/logrotate.d/$APP_NAME > /dev/null <<EOF
 EOF
 
 print_step "15. Creating backup script..."
-sudo tee /usr/local/bin/backup-$APP_NAME > /dev/null <<EOF
+tee /usr/local/bin/backup-$APP_NAME > /dev/null <<EOF
 #!/bin/bash
 BACKUP_DIR="/var/backups/$APP_NAME"
 DATE=\$(date +%Y%m%d_%H%M%S)
@@ -238,13 +233,13 @@ find \$BACKUP_DIR -name "data_*.tar.gz" -mtime +30 -delete
 echo "Backup completed: \$BACKUP_DIR/data_\$DATE.tar.gz"
 EOF
 
-sudo chmod +x /usr/local/bin/backup-$APP_NAME
+chmod +x /usr/local/bin/backup-$APP_NAME
 
 # Setup daily backup cron job
 (crontab -l 2>/dev/null; echo "0 2 * * * /usr/local/bin/backup-$APP_NAME") | crontab -
 
 print_step "16. Setting up monitoring..."
-sudo tee /usr/local/bin/monitor-$APP_NAME > /dev/null <<EOF
+tee /usr/local/bin/monitor-$APP_NAME > /dev/null <<EOF
 #!/bin/bash
 if ! systemctl is-active --quiet $APP_NAME; then
     echo "LinkTracker service is down, restarting..."
@@ -253,7 +248,7 @@ if ! systemctl is-active --quiet $APP_NAME; then
 fi
 EOF
 
-sudo chmod +x /usr/local/bin/monitor-$APP_NAME
+chmod +x /usr/local/bin/monitor-$APP_NAME
 
 # Add monitoring to cron
 (crontab -l 2>/dev/null; echo "*/5 * * * * /usr/local/bin/monitor-$APP_NAME") | crontab -
@@ -339,7 +334,7 @@ if systemctl is-active --quiet $APP_NAME; then
     print_status "✅ LinkTracker service is running"
 else
     print_error "❌ LinkTracker service failed to start"
-    sudo journalctl -u $APP_NAME --no-pager -l
+    journalctl -u $APP_NAME --no-pager -l
 fi
 
 # Check if Nginx is running
@@ -363,9 +358,9 @@ echo "   • Default admin user: admin@linktracker.com"
 echo "   • Default admin password: admin123"
 echo ""
 echo "🔧 Management Commands:"
-echo "   • View logs: sudo journalctl -u $APP_NAME -f"
-echo "   • Restart service: sudo systemctl restart $APP_NAME"
-echo "   • Check status: sudo systemctl status $APP_NAME"
+echo "   • View logs: journalctl -u $APP_NAME -f"
+echo "   • Restart service: systemctl restart $APP_NAME"
+echo "   • Check status: systemctl status $APP_NAME"
 echo "   • Add user: cd $APP_DIR && node manage-users.js <email> <password> <name> [plan]"
 echo "   • Backup data: /usr/local/bin/backup-$APP_NAME"
 echo ""
@@ -381,16 +376,16 @@ print_warning "Remember to configure your DNS to point $DOMAIN_NAME to this serv
 echo ""
 print_step "19. Firewall configuration (optional)..."
 echo "To secure your server, consider enabling UFW firewall:"
-echo "   sudo ufw allow ssh"
-echo "   sudo ufw allow 'Nginx Full'"
-echo "   sudo ufw enable"
+echo "   ufw allow ssh"
+echo "   ufw allow 'Nginx Full'"
+echo "   ufw enable"
 
 # Display backup restoration instructions
 echo ""
 echo "💾 To restore from backup:"
-echo "   sudo systemctl stop $APP_NAME"
+echo "   systemctl stop $APP_NAME"
 echo "   cd $APP_DIR/server"
 echo "   tar -xzf /var/backups/$APP_NAME/data_YYYYMMDD_HHMMSS.tar.gz"
-echo "   sudo systemctl start $APP_NAME"
+echo "   systemctl start $APP_NAME"
 
 print_status "Deployment script completed! Your LinkTracker application should now be accessible."
