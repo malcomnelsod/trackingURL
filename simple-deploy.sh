@@ -21,12 +21,8 @@ if ! command -v node &> /dev/null; then
 fi
 
 echo "📦 Step 2: Installing Nginx..."
-if ! command -v apache2 &> /dev/null; then
-    apt install -y apache2
-    a2enmod rewrite
-    a2enmod proxy
-    a2enmod proxy_http
-    a2enmod headers
+if ! command -v nginx &> /dev/null; then
+    apt install -y nginx
 fi
 
 echo "📦 Step 3: Installing PM2..."
@@ -70,66 +66,63 @@ Environment=PORT=3001
 WantedBy=multi-user.target
 EOF
 
-echo "🌐 Step 9: Creating simple Apache configuration..."
-cat > /etc/apache2/sites-available/$APP_NAME.conf << EOF
-<VirtualHost *:80>
-    ServerName $DOMAIN_NAME
-    DocumentRoot $APP_DIR/dist
-    
-    # Enable rewrite engine
-    RewriteEngine On
-    
-    # Proxy API requests to Node.js
-    ProxyPreserveHost On
-    ProxyRequests Off
+echo "🌐 Step 9: Creating simple Nginx configuration..."
+cat > /etc/nginx/sites-available/$APP_NAME.conf << EOF
+server {
+    listen 80;
+    server_name $DOMAIN_NAME;
     
     # API routes
-    ProxyPass /api/ http://localhost:3001/api/
-    ProxyPassReverse /api/ http://localhost:3001/api/
+    location /api/ {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
     
-    # Short link redirects (6-8 character codes)
-    RewriteRule "^/([a-zA-Z0-9]{6,8})$" "http://localhost:3001/\$1" [P,L]
+    # Short link redirects
+    location ~ ^/[a-zA-Z0-9]{6,8}$ {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
     
-    # Serve static files
-    <Directory "$APP_DIR/dist">
-        Options -Indexes
-        AllowOverride None
-        Require all granted
-        
-        # Handle React Router
-        RewriteEngine On
-        RewriteBase /
-        RewriteRule ^index\.html$ - [L]
-        RewriteCond %{REQUEST_FILENAME} !-f
-        RewriteCond %{REQUEST_FILENAME} !-d
-        RewriteRule . /index.html [L]
-    </Directory>
+    # Static files
+    location / {
+        root $APP_DIR/dist;
+        try_files \$uri \$uri/ /index.html;
+    }
     
-    # Security headers
-    Header always set X-Content-Type-Options nosniff
-    Header always set X-Frame-Options DENY
-    Header always set X-XSS-Protection "1; mode=block"
-    
-    # Logging
-    ErrorLog \${APACHE_LOG_DIR}/$APP_NAME-error.log
-    CustomLog \${APACHE_LOG_DIR}/$APP_NAME-access.log combined
-</VirtualHost>
+    # Health check
+    location /health {
+        access_log off;
+        return 200 "healthy";
+        add_header Content-Type text/plain;
+    }
+}
 EOF
 
 echo "🔗 Step 10: Enabling site..."
-# Disable default Apache site
-a2dissite 000-default
+# Remove default Nginx site
+rm -f /etc/nginx/sites-enabled/default
 # Enable our site
-a2ensite $APP_NAME
+ln -sf /etc/nginx/sites-available/$APP_NAME.conf /etc/nginx/sites-enabled/
 
-echo "🧪 Step 11: Testing Apache configuration..."
-apache2ctl configtest
+echo "🧪 Step 11: Testing Nginx configuration..."
+nginx -t
 
 echo "🚀 Step 12: Starting services..."
 systemctl daemon-reload
 systemctl enable $APP_NAME
 systemctl start $APP_NAME
-systemctl restart apache2
+systemctl restart nginx
 
 echo "✅ Step 13: Checking service status..."
 sleep 3
@@ -142,10 +135,10 @@ else
     exit 1
 fi
 
-if systemctl is-active --quiet apache2; then
-    echo "✅ Apache is running"
+if systemctl is-active --quiet nginx; then
+    echo "✅ Nginx is running"
 else
-    echo "❌ Apache failed to start"
+    echo "❌ Nginx failed to start"
     exit 1
 fi
 
