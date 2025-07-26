@@ -19,6 +19,11 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
+// Add console log to confirm server is starting
+console.log('Starting LinkTracker server...');
+console.log('Port:', PORT);
+console.log('Environment:', process.env.NODE_ENV || 'development');
+
 // Rate limiting
 const rateLimiter = new RateLimiterMemory({
   keyPrefix: 'middleware',
@@ -29,7 +34,7 @@ const rateLimiter = new RateLimiterMemory({
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:5173', 'http://localhost:3000'],
+  origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:4173'],
   credentials: true
 }));
 app.use(express.json());
@@ -46,6 +51,11 @@ const rateLimitMiddleware = async (req, res, next) => {
 };
 
 app.use(rateLimitMiddleware);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
 
 // CSV file paths
 const DATA_DIR = path.join(__dirname, 'data');

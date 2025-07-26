@@ -21,6 +21,7 @@ class ApiClient {
     }
 
     try {
+      console.log('Making request to:', url);
       const response = await fetch(url, {
         ...options,
         headers,
@@ -33,6 +34,7 @@ class ApiClient {
 
       return response.json();
     } catch (error) {
+      console.error('API request failed:', error);
       if (error instanceof TypeError && error.message.includes('fetch')) {
         throw new Error('Unable to connect to server. Please ensure the server is running.');
       }
