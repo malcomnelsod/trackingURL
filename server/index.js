@@ -70,11 +70,15 @@ const FILES = {
 // Initialize data directory and CSV files
 async function initializeDataFiles() {
   try {
+    console.log('Initializing data directory:', DATA_DIR);
     await fs.mkdir(DATA_DIR, { recursive: true });
+    console.log('Data directory created successfully');
     
     // Initialize users.csv
     const usersExists = await fs.access(FILES.users).then(() => true).catch(() => false);
+    console.log('Users file exists:', usersExists);
     if (!usersExists) {
+      console.log('Creating users.csv file...');
       const usersWriter = csvWriter.createObjectCsvWriter({
         path: FILES.users,
         header: [
@@ -97,6 +101,7 @@ async function initializeDataFiles() {
         plan: 'pro',
         created_at: new Date().toISOString()
       }]);
+      console.log('Default admin user created');
     }
 
     // Initialize other CSV files
@@ -109,16 +114,21 @@ async function initializeDataFiles() {
 
     for (const { file, headers } of csvFiles) {
       const exists = await fs.access(file).then(() => true).catch(() => false);
+      console.log(`File ${file} exists:`, exists);
       if (!exists) {
+        console.log(`Creating ${file}...`);
         const writer = csvWriter.createObjectCsvWriter({
           path: file,
           header: headers.map(h => ({ id: h, title: h }))
         });
         await writer.writeRecords([]);
+        console.log(`${file} created successfully`);
       }
     }
+    console.log('All data files initialized successfully');
   } catch (error) {
     console.error('Error initializing data files:', error);
+    throw error; // Re-throw to prevent server from starting with broken data setup
   }
 }
 
