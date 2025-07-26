@@ -85,7 +85,7 @@ server {
     }
     
     # Short link redirects
-    location ~ ^/[a-zA-Z0-9]{6,8}$ {
+    location ~ ^/[a-zA-Z0-9]{6,8}\$ {
         proxy_pass http://localhost:3001;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
