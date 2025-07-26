@@ -83,7 +83,7 @@ cp -r ./* $APP_DIR/
 cd $APP_DIR
 
 print_step "7. Installing dependencies..."
-npm install --production
+npm install
 
 print_step "8. Building the application..."
 npm run build
